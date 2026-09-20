@@ -366,7 +366,18 @@ function escapeHTML(text) {
     return div.innerHTML;
 
 }
+function testHindiVoice() {
+  const text = "नमस्ते, यह हमारी हिंदी आवाज़ का परीक्षण है।";
 
+  const speech = new SpeechSynthesisUtterance(text);
+  speech.lang = "hi-IN";
+  speech.rate = 0.9;
+  speech.pitch = 1;
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(speech);
+}
+    
 </script>
 
 </body>
