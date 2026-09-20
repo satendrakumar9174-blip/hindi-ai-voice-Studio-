@@ -1,1 +1,374 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Hindi Voice Studio</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f1117;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #171a23;
+            border-bottom: 1px solid #2b3040;
+            padding: 18px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .logo {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            color: #9ca3af;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        main {
+            width: 100%;
+            max-width: 1000px;
+            margin: auto;
+            padding: 25px 16px 50px;
+        }
+
+        .welcome {
+            margin-bottom: 25px;
+        }
+
+        .welcome h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .welcome p {
+            color: #a9afbd;
+            line-height: 1.5;
+        }
+
+        .card {
+            background: #171a23;
+            border: 1px solid #2b3040;
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 14px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 300px;
+            resize: vertical;
+            background: #0d0f14;
+            color: #ffffff;
+            border: 1px solid #343a4a;
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 16px;
+            line-height: 1.7;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #7c5cff;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        button {
+            border: none;
+            border-radius: 9px;
+            padding: 12px 18px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .primary {
+            background: #7c5cff;
+            color: white;
+        }
+
+        .secondary {
+            background: #292e3b;
+            color: white;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .characters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .character {
+            background: #0d0f14;
+            border: 1px solid #303646;
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .character-name {
+            font-size: 17px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .voice-select {
+            width: 100%;
+            padding: 9px;
+            background: #171a23;
+            color: white;
+            border: 1px solid #343a4a;
+            border-radius: 7px;
+        }
+
+        .empty {
+            color: #8f96a6;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .status {
+            color: #a9afbd;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        footer {
+            text-align: center;
+            color: #6f7685;
+            font-size: 13px;
+            padding: 25px;
+        }
+
+        @media (max-width: 600px) {
+            .welcome h1 {
+                font-size: 23px;
+            }
+
+            textarea {
+                min-height: 250px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <div class="logo">🎙️ Hindi Voice Studio</div>
+    <div class="subtitle">Personal Hindi AI Storytelling Studio</div>
+</header>
+
+<main>
+
+    <section class="welcome">
+        <h1>अपनी कहानी को Voice में बदलें</h1>
+        <p>
+            Script डालें, characters automatically detect करें और
+            आगे प्रत्येक character के लिए अलग voice चुनें।
+        </p>
+    </section>
+
+    <section class="card">
+
+        <h2>📝 Story Script</h2>
+
+        <textarea id="scriptInput" placeholder="उदाहरण:
+
+वर्णनकर्ता: सुबह का समय था। गाँव में चारों तरफ शांति थी।
+
+रमेश: भाई, आज बहुत काम करना है।
+
+अनिल: हाँ रमेश, लेकिन पहले चाय पी लेते हैं।
+
+वर्णनकर्ता: दोनों दोस्त दुकान की तरफ चल पड़े।"></textarea>
+
+        <div class="button-row">
+
+            <button class="primary" onclick="detectCharacters()">
+                🔍 Detect Characters
+            </button>
+
+            <button class="secondary" onclick="clearScript()">
+                🗑️ Clear
+            </button>
+
+        </div>
+
+        <div id="status" class="status"></div>
+
+    </section>
+
+    <section class="card">
+
+        <h2>🎭 Characters & Voices</h2>
+
+        <div id="characters" class="characters">
+
+            <div class="empty">
+                पहले अपनी script डालें और
+                <br>
+                "Detect Characters" दबाएँ।
+            </div>
+
+        </div>
+
+    </section>
+
+</main>
+
+<footer>
+    Personal-use Hindi Voice Studio
+</footer>
+
+
+<script>
+
+function detectCharacters() {
+
+    const script = document.getElementById("scriptInput").value;
+
+    const characterBox = document.getElementById("characters");
+    const status = document.getElementById("status");
+
+    if (!script.trim()) {
+
+        characterBox.innerHTML = `
+            <div class="empty">
+                पहले script डालें।
+            </div>
+        `;
+
+        status.textContent = "⚠️ Script खाली है।";
+        return;
+    }
+
+    const lines = script.split("\n");
+
+    const characters = [];
+
+    lines.forEach(line => {
+
+        const match = line.match(/^\s*([^:：]+)\s*[:：]/);
+
+        if (match) {
+
+            const name = match[1].trim();
+
+            if (name && !characters.includes(name)) {
+                characters.push(name);
+            }
+
+        }
+
+    });
+
+    if (characters.length === 0) {
+
+        characterBox.innerHTML = `
+            <div class="empty">
+                कोई character नहीं मिला।<br><br>
+                Format ऐसा रखें:<br>
+                <b>रमेश: मेरा नाम रमेश है।</b>
+            </div>
+        `;
+
+        status.textContent = "⚠️ Character format नहीं मिला।";
+        return;
+    }
+
+    characterBox.innerHTML = "";
+
+    characters.forEach(name => {
+
+        const character = document.createElement("div");
+
+        character.className = "character";
+
+        character.innerHTML = `
+            <div class="character-name">
+                🎭 ${escapeHTML(name)}
+            </div>
+
+            <select class="voice-select">
+                <option value="">Voice चुनें</option>
+                <option>Hindi Male 1</option>
+                <option>Hindi Male 2</option>
+                <option>Hindi Female 1</option>
+                <option>Hindi Female 2</option>
+                <option>Hindi Elder Male</option>
+                <option>Hindi Elder Female</option>
+            </select>
+        `;
+
+        characterBox.appendChild(character);
+
+    });
+
+    status.textContent =
+        `✅ ${characters.length} character detect हुए।`;
+
+}
+
+
+function clearScript() {
+
+    document.getElementById("scriptInput").value = "";
+
+    document.getElementById("characters").innerHTML = `
+        <div class="empty">
+            पहले अपनी script डालें और
+            <br>
+            "Detect Characters" दबाएँ।
+        </div>
+    `;
+
+    document.getElementById("status").textContent = "";
+
+}
+
+
+function escapeHTML(text) {
+
+    const div = document.createElement("div");
+
+    div.textContent = text;
+
+    return div.innerHTML;
+
+}
+
+</script>
+
+</body>
+</html>
 
