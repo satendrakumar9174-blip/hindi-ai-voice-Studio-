@@ -372,9 +372,9 @@ function testHindiVoice() {
   speech.rate = 0.9;
   speech.pitch = 1;
 
-  speechSynthesis.cancel();
+  SpeechSynthesis.cancel();
   speechSynthesis.speak(speech);
-}
+}const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyWop5gitoA0iFheICcD7siEnmCHOJsWnqueV73s4kdonRguXet_NidBnAbqxlDaavy/exec";  
  const googleHindiVoices = [
   { name: "Zephyr - Bright", id: "Zephyr" },
   { name: "Puck - Upbeat", id: "Puck" },
