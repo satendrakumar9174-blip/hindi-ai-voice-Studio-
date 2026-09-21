@@ -278,17 +278,15 @@ async function generateVoice(text, voice) {
 
     const audioUrl = URL.createObjectURL(audioBlob);
 
-    const audio = new Audio(audioUrl);
-    audio.controls = true;
-    audio.play();
-
     return audioUrl;
 
   } catch (error) {
     console.error(error);
     alert("Voice generate नहीं हुई: " + error.message);
+    return null;
   }
 }
+
 
 function base64ToBlob(base64, mimeType) {
   const byteCharacters = atob(base64);
