@@ -394,8 +394,11 @@ function detectCharacters() {
 function generateVoiceForCharacter(button) {
   const characterBox = button.closest(".character");
 
-  const characterName =
-    characterBox.querySelector(".character-name").textContent.trim();
+    const characterName =
+    characterBox.querySelector(".character-name").textContent
+    .replace(/^[^\p{L}\p{N}]*/u, "")
+    .trim();
+
 
   const voiceSelect =
     characterBox.querySelector(".voice-select");
