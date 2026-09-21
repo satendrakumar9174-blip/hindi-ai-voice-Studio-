@@ -377,6 +377,9 @@ function detectCharacters() {
         <option value="${voice.id}">${voice.name}</option>
     `).join("")}
 </select>
+<button class="generate-voice-btn" onclick="generateVoiceForCharacter(this)">
+  🔊 Generate Voice
+</button>
 
         `;
 
@@ -387,6 +390,49 @@ function detectCharacters() {
     status.textContent =
         `✅ ${characters.length} character detect हुए।`;
 
+}
+function generateVoiceForCharacter(button) {
+  const characterBox = button.closest(".character");
+
+  const characterName =
+    characterBox.querySelector(".character-name").textContent.trim();
+
+  const voiceSelect =
+    characterBox.querySelector(".voice-select");
+
+  const voice = voiceSelect.value;
+
+  if (!voice) {
+    alert("पहले Voice चुनें।");
+    return;
+  }
+
+  const scriptText =
+    document.querySelector("textarea").value;
+
+  const lines = scriptText.split("\n");
+
+  const characterLines = lines
+    .filter(line => {
+      const match = line.match(/^\s*([^:：]+)\s*[:：]\s*(.*)$/);
+      return match && match[1].trim() === characterName;
+    })
+    .map(line => line.match(/^\s*([^:：]+)\s*[:：]\s*(.*)$/)[2])
+    .join(" ");
+
+  if (!characterLines) {
+    alert("इस character का dialogue नहीं मिला।");
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "⏳ Generating...";
+
+  generateVoice(characterLines, voice)
+    .finally(() => {
+      button.disabled = false;
+      button.textContent = "🔊 Generate Voice";
+    });
 }
 
 
