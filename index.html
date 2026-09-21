@@ -252,6 +252,58 @@
 
 
 <script>
+async function generateVoice(text, voice) {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify({
+        text: text,
+        voice: voice
+      })
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || "Voice generation failed");
+    }
+
+    const audioBlob = base64ToBlob(
+      result.audioData,
+      result.mimeType
+    );
+
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    const audio = new Audio(audioUrl);
+    audio.controls = true;
+    audio.play();
+
+    return audioUrl;
+
+  } catch (error) {
+    console.error(error);
+    alert("Voice generate नहीं हुई: " + error.message);
+  }
+}
+
+function base64ToBlob(base64, mimeType) {
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+
+  const byteArray = new Uint8Array(byteNumbers);
+
+  return new Blob([byteArray], {
+    type: mimeType
+  });
+}
 
 function detectCharacters() {
 
