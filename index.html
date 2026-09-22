@@ -533,7 +533,7 @@ function testHindiVoice() {
 ];
 
 
-function generateAllVoices() {
+async function generateAllVoices() {
   const script = document.getElementById("scriptInput").value;
 
   if (!script.trim()) {
@@ -542,7 +542,6 @@ function generateAllVoices() {
   }
 
   const lines = script.split("\n");
-
   const dialogues = [];
 
   lines.forEach(line => {
@@ -563,12 +562,196 @@ function generateAllVoices() {
     return;
   }
 
-  console.log("Detected dialogues:", dialogues);
+  const characterBoxes =
+    document.querySelectorAll(".character");
 
-  alert(
-    `✅ ${dialogues.length} dialogues मिले।`
+  const voiceMap = {};
+
+  characterBoxes.forEach(box => {
+    const nameElement =
+      box.querySelector(".character-name");
+
+    const select =
+      box.querySelector(".voice-select");
+
+    if (nameElement && select) {
+      const name =
+        nameElement.textContent
+          .replace(/^[^\p{L}\p{N}]*/u, "")
+          .trim();
+
+      voiceMap[name] = select.value;
+    }
+  });
+
+  for (const dialogue of dialogues) {
+    if (!voiceMap[dialogue.character]) {
+      alert(
+        `⚠️ ${dialogue.character} की voice select नहीं की गई है।`
+      );
+      return;
+    }
+  }
+
+  const button =
+    document.querySelector(
+      'button[onclick="generateAllVoices()"]'
+    );
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "⏳ पूरी story generate हो रही है...";
+  }
+
+  try {
+    const audioUrls = [];
+
+    for (let i = 0; i < dialogues.length; i++) {
+
+      const dialogue = dialogues[i];
+
+      if (button) {
+        button.textContent =
+          `⏳ ${i + 1}/${dialogues.length} dialogue...`;
+      }
+
+      const audioUrl = await generateVoice(
+        dialogue.text,
+        voiceMap[dialogue.character]
+      );
+
+      if (!audioUrl) {
+        throw new Error(
+          `${dialogue.character} का audio generate नहीं हुआ।`
+        );
+      }
+
+      audioUrls.push(audioUrl);
+    }
+
+    if (button) {
+      button.textContent = "🔗 Audio जोड़ रहा है...";
+    }
+
+    const wavBuffers = [];
+
+    for (const url of audioUrls) {
+      const response = await fetch(url);
+      const buffer = await response.arrayBuffer();
+      wavBuffers.push(buffer);
+    }
+
+    const finalWav =
+      combineWavFiles(wavBuffers);
+
+    const finalUrl =
+      URL.createObjectURL(finalWav);
+
+    let player =
+      document.getElementById("final-audio-player");
+
+    if (!player) {
+      player = document.createElement("audio");
+      player.id = "final-audio-player";
+      player.controls = true;
+      player.style.width = "100%";
+      player.style.marginTop = "15px";
+
+      document
+        .getElementById("characters")
+        .appendChild(player);
+    }
+
+    player.src = finalUrl;
+
+    alert("✅ पूरी story का एक audio तैयार है।");
+
+    await player.play().catch(() => {});
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      "❌ Final audio generate नहीं हुआ:\n" +
+      error.message
+    );
+
+  } finally {
+
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "🎙️ Generate All Voices";
+    }
+  }
+}
+function combineWavFiles(buffers) {
+
+  const headerSize = 44;
+
+  let totalDataSize = 0;
+
+  buffers.forEach(buffer => {
+    totalDataSize += buffer.byteLength - headerSize;
+  });
+
+  const finalBuffer =
+    new ArrayBuffer(
+      headerSize + totalDataSize
+    );
+
+  const finalView =
+    new DataView(finalBuffer);
+
+  const firstView =
+    new DataView(buffers[0]);
+
+  // WAV header
+  for (let i = 0; i < headerSize; i++) {
+    finalView.setUint8(
+      i,
+      firstView.getUint8(i)
+    );
+  }
+
+  // नया total data size
+  finalView.setUint32(
+    4,
+    36 + totalDataSize,
+    true
+  );
+
+  finalView.setUint32(
+    40,
+    totalDataSize,
+    true
+  );
+
+  let offset = headerSize;
+
+  buffers.forEach(buffer => {
+
+    const source =
+      new Uint8Array(buffer);
+
+    const audioData =
+      source.subarray(headerSize);
+
+    new Uint8Array(finalBuffer)
+      .set(audioData, offset);
+
+    offset += audioData.length;
+  });
+
+  return new Blob(
+    [finalBuffer],
+    { type: "audio/wav" }
   );
 }
+
+
+
 
    
 </script>
