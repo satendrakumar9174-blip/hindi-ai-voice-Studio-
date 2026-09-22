@@ -372,14 +372,13 @@ function detectCharacters() {
     `✅ ${characters.length} character मिले।`;
 }
 
-function generateVoiceForCharacter(button) {
+async function generateVoiceForCharacter(button) {
   const characterBox = button.closest(".character");
 
-    const characterName =
+  const characterName =
     characterBox.querySelector(".character-name").textContent
-    .replace(/^[^\p{L}\p{N}]*/u, "")
-    .trim();
-
+      .replace(/^[^\p{L}\p{N}]*/u, "")
+      .trim();
 
   const voiceSelect =
     characterBox.querySelector(".voice-select");
@@ -398,10 +397,18 @@ function generateVoiceForCharacter(button) {
 
   const characterLines = lines
     .filter(line => {
-      const match = line.match(/^\s*([^:：]+)\s*[:：]\s*(.*)$/);
-      return match && match[1].trim() === characterName;
+      const match = line.match(
+        /^\s*([^:：]+)\s*[:：]\s*(.*)$/
+      );
+
+      return match &&
+        match[1].trim() === characterName;
     })
-    .map(line => line.match(/^\s*([^:：]+)\s*[:：]\s*(.*)$/)[2])
+    .map(line =>
+      line.match(
+        /^\s*([^:：]+)\s*[:：]\s*(.*)$/
+      )[2]
+    )
     .join(" ");
 
   if (!characterLines) {
@@ -412,12 +419,44 @@ function generateVoiceForCharacter(button) {
   button.disabled = true;
   button.textContent = "⏳ Generating...";
 
-  generateVoice(characterLines, voice)
-    .finally(() => {
-      button.disabled = false;
-      button.textContent = "🔊 Generate Voice";
-    });
+  try {
+    const audioUrl =
+      await generateVoice(characterLines, voice);
+
+    if (audioUrl) {
+
+      let player =
+        characterBox.querySelector(".voice-player");
+
+      if (!player) {
+        player = document.createElement("audio");
+        player.className = "voice-player";
+        player.controls = true;
+
+        characterBox.appendChild(player);
+      }
+
+      player.src = audioUrl;
+
+      await player.play().catch(() => {});
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      "Voice generate नहीं हुई: " +
+      error.message
+    );
+
+  } finally {
+
+    button.disabled = false;
+    button.textContent = "🔊 Generate Voice";
+  }
 }
+
 
 
 function clearScript() {
