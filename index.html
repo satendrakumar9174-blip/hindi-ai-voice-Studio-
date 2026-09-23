@@ -313,7 +313,7 @@ function detectCharacters() {
 
   if (!script.trim()) {
     characterBox.innerHTML =
-      `<div class="empty">पहले script डालें।</div>`;
+      '<div class="empty">पहले script डालें।</div>';
     status.textContent = "⚠️ Script खाली है।";
     return;
   }
@@ -339,9 +339,11 @@ function detectCharacters() {
 
   if (characters.length === 0) {
     characterBox.innerHTML =
-      `<div class="empty">कोई character नहीं मिला।</div>`;
+      '<div class="empty">कोई character नहीं मिला।</div>';
+
     status.textContent =
       "⚠️ Character format जाँचें। उदाहरण: Ramesh: नमस्ते";
+
     return;
   }
 
@@ -350,28 +352,34 @@ function detectCharacters() {
     character.className = "character";
 
     character.innerHTML = `
-  <div class="character-name">🎭 ${escapeHTML(name)}</div>
+      <div class="character-name">
+        🎭 ${escapeHTML(name)}
+      </div>
 
-  <select class="voice-select">
-    <option value="">Voice चुनें</option>
-    ${googleHindiVoices.map(voice => `
-      <option value="${voice.id}">${voice.name}</option>
-    `).join("")}
-  </select>
+      <select class="voice-select">
+        <option value="">Voice चुनें</option>
 
-  <button
-    class="generate-voice-btn"
-    onclick="generateVoiceForCharacter(this)">
-    🎙️ Generate Voice
-  </button>
-`;
+        ${googleHindiVoices.map(voice => `
+          <option value="${voice.id}">
+            ${voice.name}
+          </option>
+        `).join("")}
+      </select>
 
-characterBox.appendChild(character);
+      <button
+        class="generate-voice-btn"
+        onclick="generateVoiceForCharacter(this)">
+        🎙️ Generate Voice
+      </button>
+    `;
 
+    characterBox.appendChild(character);
+  });
 
   status.textContent =
     `✅ ${characters.length} character मिले।`;
 }
+
 
 async function generateVoiceForCharacter(button) {
   const characterBox = button.closest(".character");
