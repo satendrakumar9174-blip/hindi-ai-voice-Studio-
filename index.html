@@ -350,16 +350,24 @@ function detectCharacters() {
     character.className = "character";
 
     character.innerHTML = `
-      <div class="character-name">🎭 ${escapeHTML(name)}</div>
+  <div class="character-name">🎭 ${escapeHTML(name)}</div>
 
-      <select class="voice-select">
-        <option value="">Voice चुनें</option>
-        ${googleHindiVoices.map(voice => `
-          <option value="${voice.id}">
-            ${voice.name}
-          </option>
-        `).join("")}
-      </select>
+  <select class="voice-select">
+    <option value="">Voice चुनें</option>
+    ${googleHindiVoices.map(voice => `
+      <option value="${voice.id}">
+        ${voice.name}
+      </option>
+    `).join("")}
+  </select>
+
+  <button
+    class="generate-voice-btn"
+    onclick="generateVoiceForCharacter(this)">
+    🔊 Generate Voice
+  </button>
+`;
+
 
       <button
         class="generate-voice-btn"
