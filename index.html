@@ -255,6 +255,22 @@
 
 
 <script>
+ function extractEmotion(text) {
+  const match = text.match(/^\s*\[([^\]]+)\]\s*/);
+
+  if (match) {
+    return {
+      emotion: match[1].trim(),
+      cleanText: text.replace(/^\s*\[[^\]]+\]\s*/, "").trim()
+    };
+  }
+
+  return {
+    emotion: "Neutral",
+    cleanText: text.trim()
+  };
+}
+   
 async function generateVoice(text, voice) {
   try {
     const response = await fetch(BACKEND_URL, {
