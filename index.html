@@ -355,29 +355,19 @@ function detectCharacters() {
   <select class="voice-select">
     <option value="">Voice चुनें</option>
     ${googleHindiVoices.map(voice => `
-      <option value="${voice.id}">
-        ${voice.name}
-      </option>
+      <option value="${voice.id}">${voice.name}</option>
     `).join("")}
   </select>
 
   <button
     class="generate-voice-btn"
     onclick="generateVoiceForCharacter(this)">
-    🔊 Generate Voice
+    🎙️ Generate Voice
   </button>
 `;
 
+characterBox.appendChild(character);
 
-      <button
-        class="generate-voice-btn"
-        onclick="generateVoiceForCharacter(this)">
-        🔊 Generate Voice
-      </button>
-    `;
-
-    characterBox.appendChild(character);
-  });
 
   status.textContent =
     `✅ ${characters.length} character मिले।`;
