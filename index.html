@@ -224,6 +224,9 @@
 <button class="primary" onclick="generateAllVoices()">
     🎙️ Generate All Voices
 </button>
+<button class="primary" onclick="detectEmotions()">
+  😊 Detect Emotions
+</button>
 
         </div>
 
@@ -269,6 +272,104 @@
     emotion: "Neutral",
     cleanText: text.trim()
   };
+}
+async function detectEmotions() {
+  const scriptInput = document.getElementById("scriptInput");
+  const status = document.getElementById("status");
+
+  const script = scriptInput.value;
+
+  if (!script.trim()) {
+    alert("पहले story script डालें।");
+    return;
+  }
+
+  const lines = script.split("\n");
+  const newLines = [];
+
+  try {
+    status.textContent = "⏳ Emotions detect हो रही हैं...";
+
+    for (const line of lines) {
+      const match = line.match(
+        /^\s*([^:：]+)\s*[:：]\s*(.*)$/
+      );
+
+      if (!match || !match[2].trim()) {
+        newLines.push(line);
+        continue;
+      }
+
+      const character = match[1].trim();
+      const dialogue = match[2].trim();
+
+      // पहले से emotion लगा है तो दोबारा detect नहीं करेंगे
+      const existingEmotion = dialogue.match(
+        /^\s*\[[^\]]+\]\s*/
+      );
+
+      if (existingEmotion) {
+        newLines.push(line);
+        continue;
+      }
+
+      const response = await fetch(BACKEND_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          action: "detectEmotion",
+          text: dialogue
+        })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(
+          result.error || "Emotion detection failed"
+        );
+      }
+
+      const emotionMap = {
+        Neutral: "सामान्य स्वर में",
+        Happy: "खुश होकर",
+        Sad: "दुखी होकर",
+        Angry: "गुस्से में",
+        Excited: "उत्साहित होकर",
+        Fearful: "डरते हुए",
+        Surprised: "हैरान होकर",
+        Disappointed: "निराश होकर",
+        Worried: "चिंतित होकर",
+        Serious: "गंभीरता से"
+      };
+
+      const hindiEmotion =
+        emotionMap[result.emotion] ||
+        "सामान्य स्वर में";
+
+      newLines.push(
+        `${character}: [${hindiEmotion}] ${dialogue}`
+      );
+    }
+
+    scriptInput.value = newLines.join("\n");
+
+    status.textContent =
+      "✅ सभी dialogues की emotions detect हो गईं।";
+
+  } catch (error) {
+    console.error(error);
+
+    status.textContent =
+      "❌ Emotion detection में समस्या हुई।";
+
+    alert(
+      "❌ Emotion detect नहीं हुई:\n" +
+      error.message
+    );
+  }
 }
    
 async function generateVoice(text, voice) {
