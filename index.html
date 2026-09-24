@@ -387,8 +387,7 @@ async function detectEmotions() {
   }
 }
 
-   
-async function generateVoice(text, voice) {
+async function generateVoice(text, voice, emotion = "Neutral") {
   try {
     const response = await fetch(BACKEND_URL, {
       method: "POST",
@@ -397,14 +396,17 @@ async function generateVoice(text, voice) {
       },
       body: JSON.stringify({
         text: text,
-        voice: voice
+        voice: voice,
+        emotion: emotion
       })
     });
 
     const result = await response.json();
 
     if (!result.success) {
-      throw new Error(result.error || "Voice generation failed");
+      throw new Error(
+        result.error || "Voice generation failed"
+      );
     }
 
     const audioBlob = base64ToBlob(
@@ -418,10 +420,17 @@ async function generateVoice(text, voice) {
 
   } catch (error) {
     console.error(error);
-    alert("Voice generate नहीं हुई: " + error.message);
+
+    alert(
+      "Voice generate नहीं हुई: " +
+      error.message
+    );
+
     return null;
   }
 }
+   
+
 
 
 function base64ToBlob(base64, mimeType) {
