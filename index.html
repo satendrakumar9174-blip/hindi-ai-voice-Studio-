@@ -759,15 +759,19 @@ async function generateAllVoices() {
 
       const dialogue = dialogues[i];
 
-      if (button) {
-        button.textContent =
-          `⏳ ${i + 1}/${dialogues.length} dialogue...`;
-      }
+if (button) {
+  button.textContent =
+    `⏳ ${i + 1}/${dialogues.length} dialogue...`;
+}
 
-      const audioUrl = await generateVoice(
-        dialogue.text,
-        voiceMap[dialogue.character]
-      );
+const emotionData = extractEmotion(dialogue.text);
+
+const audioUrl = await generateVoice(
+  emotionData.cleanText,
+  voiceMap[dialogue.character],
+  emotionData.emotion
+);
+
 
       if (!audioUrl) {
         throw new Error(
