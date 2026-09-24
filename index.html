@@ -527,6 +527,71 @@ function detectCharacters() {
   status.textContent =
     `✅ ${characters.length} character मिले।`;
 }
+async function playVoiceSample(button) {
+  const characterBox = button.closest(".character");
+
+  if (!characterBox) {
+    alert("Character box नहीं मिला।");
+    return;
+  }
+
+  const select = characterBox.querySelector(".voice-select");
+
+  if (!select || !select.value) {
+    alert("पहले voice select करें।");
+    return;
+  }
+
+  const voice = select.value;
+
+  button.disabled = true;
+  button.textContent = "⏳ Sample बन रहा है...";
+
+  try {
+    const sampleText =
+      "नमस्ते, यह मेरी आवाज़ का एक छोटा सा नमूना है।";
+
+    const audioUrl = await generateVoice(
+      sampleText,
+      voice,
+      "Neutral"
+    );
+
+    if (!audioUrl) {
+      throw new Error("Voice sample generate नहीं हुआ।");
+    }
+
+    let player = characterBox.querySelector(".sample-player");
+
+    if (!player) {
+      player = document.createElement("audio");
+      player.className = "sample-player";
+      player.controls = true;
+      player.style.width = "100%";
+      player.style.marginTop = "10px";
+
+      characterBox.appendChild(player);
+    }
+
+    player.src = audioUrl;
+    await player.play().catch(() => {});
+
+    button.textContent = "🔊 Voice Sample";
+
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      "❌ Voice Sample में समस्या हुई:\n" +
+      error.message
+    );
+
+    button.textContent = "🔊 Voice Sample";
+
+  } finally {
+    button.disabled = false;
+  }
+}
 
 
 async function generateVoiceForCharacter(button) {
