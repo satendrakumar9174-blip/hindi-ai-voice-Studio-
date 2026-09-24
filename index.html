@@ -286,51 +286,141 @@ async function detectEmotions() {
 
   const lines = script.split("\n");
 
+  const emotionMap = {
+    Neutral: "सामान्य स्वर में",
+    Happy: "खुश होकर",
+    Sad: "दुखी होकर",
+    Angry: "गुस्से में",
+    Excited: "उत्साहित होकर",
+    Fearful: "डरते हुए",
+    Surprised: "हैरान होकर",
+    Disappointed: "निराश होकर",
+    Worried: "चिंतित होकर",
+    Serious: "गंभीरता से"
+  };
+
+  // सभी dialogue वाली lines की जानकारी
+  const dialogueLines = [];
+
+  lines.forEach((line, index) => {
+    const match = line.match(
+      /^\s*([^:：]+)\s*[:：]\s*(.*)$/
+    );
+
+    if (match && match[2].trim()) {
+      let dialogue = match[2].trim();
+
+      // पुराना emotion tag हटाएँ
+      dialogue = dialogue.replace(
+        /^\s*\[[^\]]+\]\s*/,
+        ""
+      ).trim();
+
+      dialogueLines.push({
+        originalIndex: index,
+        character: match[1].trim(),
+        text: dialogue
+      });
+    }
+  });
+
+  if (dialogueLines.length === 0) {
+    alert("कोई dialogue नहीं मिला।");
+    return;
+  }
+
   try {
     status.textContent =
-      "⏳ पूरी story की emotions detect हो रही हैं...";
+      `⏳ ${dialogueLines.length} dialogues की emotions detect हो रही हैं...`;
 
-    const response = await fetch(BACKEND_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8"
-      },
-      body: JSON.stringify({
-        action: "detectEmotion",
-        text: script
-      })
-    });
+    // Long story को छोटे batches में भेजेंगे
+    const BATCH_SIZE = 10;
 
-    const result = await response.json();
+    const detectedEmotions = new Array(
+      dialogueLines.length
+    ).fill("Neutral");
 
-    if (!result.success) {
-      throw new Error(
-        result.error || "Emotion detection failed"
-      );
-    }
-
-    if (
-      !result.emotions ||
-      !Array.isArray(result.emotions)
+    for (
+      let start = 0;
+      start < dialogueLines.length;
+      start += BATCH_SIZE
     ) {
-      throw new Error(
-        "Emotion data सही format में नहीं मिला।"
+
+      const batch = dialogueLines.slice(
+        start,
+        start + BATCH_SIZE
       );
+
+      status.textContent =
+        `⏳ Emotion detection: ${Math.min(
+          start + BATCH_SIZE,
+          dialogueLines.length
+        )}/${dialogueLines.length} dialogues...`;
+
+      const batchText = batch
+        .map(item =>
+          `${item.character}: ${item.text}`
+        )
+        .join("\n");
+
+      const response = await fetch(BACKEND_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify({
+          action: "detectEmotion",
+          text: batchText
+        })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(
+          result.error ||
+          "Emotion detection failed"
+        );
+      }
+
+      if (
+        !result.emotions ||
+        !Array.isArray(result.emotions)
+      ) {
+        throw new Error(
+          "Emotion data सही format में नहीं मिला।"
+        );
+      }
+
+      // इस batch की emotions को सही dialogue से जोड़ना
+      batch.forEach((item, batchIndex) => {
+
+        const emotionData =
+          result.emotions[batchIndex];
+
+        if (
+          emotionData &&
+          emotionData.emotion
+        ) {
+          detectedEmotions[
+            start + batchIndex
+          ] =
+            emotionData.emotion.trim();
+        }
+      });
+
+      // लगातार API requests के बीच छोटा gap
+      if (
+        start + BATCH_SIZE <
+        dialogueLines.length
+      ) {
+        await new Promise(resolve =>
+          setTimeout(resolve, 800)
+        );
+      }
     }
 
-    const emotionMap = {
-      Neutral: "सामान्य स्वर में",
-      Happy: "खुश होकर",
-      Sad: "दुखी होकर",
-      Angry: "गुस्से में",
-      Excited: "उत्साहित होकर",
-      Fearful: "डरते हुए",
-      Surprised: "हैरान होकर",
-      Disappointed: "निराश होकर",
-      Worried: "चिंतित होकर",
-      Serious: "गंभीरता से"
-    };
-
+    // अब पूरी story में emotions लगाएँ
     let emotionIndex = 0;
 
     const newLines = lines.map(line => {
@@ -344,23 +434,20 @@ async function detectEmotions() {
       }
 
       const character = match[1].trim();
+
       let dialogue = match[2].trim();
 
-      // पुराना emotion tag हटाएँ
+      // पुराने emotion को हटाएँ
       dialogue = dialogue.replace(
         /^\s*\[[^\]]+\]\s*/,
         ""
       ).trim();
 
-      const emotionData =
-        result.emotions[emotionIndex];
+      const emotion =
+        detectedEmotions[emotionIndex] ||
+        "Neutral";
 
       emotionIndex++;
-
-      const emotion =
-        emotionData && emotionData.emotion
-          ? emotionData.emotion.trim()
-          : "Neutral";
 
       const hindiEmotion =
         emotionMap[emotion] ||
@@ -369,12 +456,14 @@ async function detectEmotions() {
       return `${character}: [${hindiEmotion}] ${dialogue}`;
     });
 
-    scriptInput.value = newLines.join("\n");
+    scriptInput.value =
+      newLines.join("\n");
 
     status.textContent =
       "✅ पूरी story की emotions detect हो गईं।";
 
   } catch (error) {
+
     console.error(error);
 
     status.textContent =
@@ -386,6 +475,7 @@ async function detectEmotions() {
     );
   }
 }
+
 
 async function generateVoice(text, voice, emotion = "Neutral") {
   try {
