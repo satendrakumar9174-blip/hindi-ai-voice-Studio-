@@ -988,16 +988,21 @@ async function generateAllVoices() {
   const lines = script.split("\n");
   const dialogues = [];
 
-  lines.forEach(line => {
+  lines.forEach((line, index) => {
     const match = line.match(
-  /^\s*([^:：]+)\s*[:：]\s*(.*)$/
-);
-
+      /^\s*([^:：]+)\s*[:：]\s*(.*)$/
+    );
 
     if (match && match[2].trim()) {
+      const emotionData = extractEmotion(
+        match[2].trim()
+      );
+
       dialogues.push({
+        index: index,
         character: match[1].trim(),
-        text: match[2].trim()
+        text: emotionData.cleanText,
+        emotion: emotionData.emotion
       });
     }
   });
@@ -1007,6 +1012,7 @@ async function generateAllVoices() {
     return;
   }
 
+  // Character → selected voice
   const characterBoxes =
     document.querySelectorAll(".character");
 
@@ -1020,15 +1026,15 @@ async function generateAllVoices() {
       box.querySelector(".voice-select");
 
     if (nameElement && select) {
-      const name =
-        nameElement.textContent
-          .replace(/^[^\p{L}\p{N}]*/u, "")
-          .trim();
+      const name = nameElement.textContent
+        .replace(/^[^\p{L}\p{N}]*/u, "")
+        .trim();
 
       voiceMap[name] = select.value;
     }
   });
 
+  // Check all voices
   for (const dialogue of dialogues) {
     if (!voiceMap[dialogue.character]) {
       alert(
@@ -1038,58 +1044,99 @@ async function generateAllVoices() {
     }
   }
 
-  const button =
-    document.querySelector(
-      'button[onclick="generateAllVoices()"]'
-    );
+  const button = document.querySelector(
+    'button[onclick="generateAllVoices()"]'
+  );
 
   if (button) {
     button.disabled = true;
-    button.textContent = "⏳ पूरी story generate हो रही है...";
   }
 
   try {
     const audioUrls = [];
 
+    // IMPORTANT:
+    // Dialogues हमेशा original script order में generate होंगे।
     for (let i = 0; i < dialogues.length; i++) {
 
       const dialogue = dialogues[i];
 
-if (button) {
-  button.textContent =
-    `⏳ ${i + 1}/${dialogues.length} dialogue...`;
-}
+      if (button) {
+        button.textContent =
+          `⏳ ${i + 1}/${dialogues.length} dialogue generate हो रहा है...`;
+      }
 
-const emotionData = extractEmotion(dialogue.text);
+      let audioUrl = null;
+      let lastError = null;
 
-const audioUrl = await generateVoice(
-  emotionData.cleanText,
-  voiceMap[dialogue.character],
-  emotionData.emotion
-);
+      // Failed dialogue को maximum 3 बार retry करें
+      for (let attempt = 1; attempt <= 3; attempt++) {
 
+        try {
+
+          audioUrl = await generateVoice(
+            dialogue.text,
+            voiceMap[dialogue.character],
+            dialogue.emotion
+          );
+
+          if (audioUrl) {
+            break;
+          }
+
+        } catch (error) {
+          lastError = error;
+        }
+
+        // Retry से पहले थोड़ा wait
+        if (attempt < 3) {
+          await new Promise(resolve =>
+            setTimeout(resolve, 1500)
+          );
+        }
+      }
 
       if (!audioUrl) {
         throw new Error(
-          `${dialogue.character} का audio generate नहीं हुआ।`
+          `${i + 1}वें dialogue (${dialogue.character}) का audio generate नहीं हुआ।`
         );
       }
 
+      // उसी order में save
       audioUrls.push(audioUrl);
     }
 
     if (button) {
-      button.textContent = "🔗 Audio जोड़ रहा है...";
+      button.textContent =
+        "🔗 सभी audio को सही order में जोड़ रहा है...";
     }
 
     const wavBuffers = [];
 
-    for (const url of audioUrls) {
-      const response = await fetch(url);
-      const buffer = await response.arrayBuffer();
+    // फिर से उसी order में audio पढ़ें
+    for (let i = 0; i < audioUrls.length; i++) {
+
+      if (button) {
+        button.textContent =
+          `🔗 Audio जोड़ रहा है: ${i + 1}/${audioUrls.length}`;
+      }
+
+      const response =
+        await fetch(audioUrls[i]);
+
+      if (!response.ok) {
+        throw new Error(
+          `Audio ${i + 1} पढ़ा नहीं जा सका।`
+        );
+      }
+
+      const buffer =
+        await response.arrayBuffer();
+
       wavBuffers.push(buffer);
     }
 
+    // Original dialogue order preserved
     const finalWav =
       combineWavFiles(wavBuffers);
 
@@ -1097,14 +1144,24 @@ const audioUrl = await generateVoice(
       URL.createObjectURL(finalWav);
 
     let player =
-      document.getElementById("final-audio-player");
+      document.getElementById(
+        "final-audio-player"
+      );
 
     if (!player) {
+
       player = document.createElement("audio");
-      player.id = "final-audio-player";
+
+      player.id =
+        "final-audio-player";
+
       player.controls = true;
-      player.style.width = "100%";
-      player.style.marginTop = "15px";
+
+      player.style.width =
+        "100%";
+
+      player.style.marginTop =
+        "15px";
 
       document
         .getElementById("characters")
@@ -1113,7 +1170,14 @@ const audioUrl = await generateVoice(
 
     player.src = finalUrl;
 
-    alert("✅ पूरी story का एक audio तैयार है।");
+    if (button) {
+      button.textContent =
+        "✅ Final audio तैयार है";
+    }
+
+    alert(
+      `✅ पूरी story का एक audio तैयार है!\n\n${dialogues.length} dialogues सही order में जोड़े गए।`
+    );
 
     await player.play().catch(() => {});
 
@@ -1126,15 +1190,24 @@ const audioUrl = await generateVoice(
       error.message
     );
 
+    if (button) {
+      button.textContent =
+        "❌ Generation failed";
+    }
+
   } finally {
 
     if (button) {
       button.disabled = false;
-      button.textContent =
-        "🎙️ Generate All Voices";
+
+      setTimeout(() => {
+        button.textContent =
+          "🎙️ Generate All Voices";
+      }, 2000);
     }
   }
 }
+
 function combineWavFiles(buffers) {
 
   const headerSize = 44;
