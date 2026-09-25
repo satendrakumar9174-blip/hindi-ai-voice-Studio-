@@ -368,50 +368,184 @@ function detectEmotions() {
   ];
 
   function detectSingleEmotion(text) {
-    const lowerText = text.toLowerCase();
+  const t = text
+    .toLowerCase()
+    .replace(/[“”‘’]/g, "")
+    .trim();
 
-    let bestEmotion = "Neutral";
-    let bestHindi = "सामान्य स्वर में";
-    let bestScore = 0;
+  const scores = {
+    Angry: 0,
+    Fearful: 0,
+    Sad: 0,
+    Happy: 0,
+    Excited: 0,
+    Surprised: 0,
+    Worried: 0,
+    Disappointed: 0,
+    Serious: 0
+  };
 
-    emotionRules.forEach(rule => {
-      let score = 0;
+  const rules = {
+    Angry: [
+      "गुस्सा", "क्रोध", "नफरत", "झूठ", "धोखा",
+      "धोखेबाज", "बेवकूफ", "चुप रहो", "चुप करो",
+      "बर्दाश्त नहीं", "गलत किया", "गलती की",
+      "तुमने ऐसा क्यों", "तुम ऐसा कैसे", "क्या कर रहे हो",
+      "मैं छोड़ूंगा नहीं", "मैं छोड़ूंगी नहीं",
+      "देख लेना", "हिम्मत कैसे"
+    ],
 
-      rule.words.forEach(word => {
-        if (lowerText.includes(word.toLowerCase())) {
-          score++;
-        }
-      });
+    Fearful: [
+      "डर", "डर गया", "डर गई", "डर रहा", "डर रही",
+      "भय", "खतरा", "खतरनाक", "बचाओ", "भागो",
+      "जान बचाओ", "भूत", "राक्षस", "अंधेरा",
+      "डरावना", "जान का खतरा", "मार डालेगा",
+      "मर जाएंगे", "मर जाएगा", "मर जाएगी"
+    ],
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestEmotion = rule.emotion;
-        bestHindi = rule.hindi;
+    Sad: [
+      "दुख", "दुखी", "रोना", "रो रहा", "रो रही",
+      "आंसू", "आँसू", "दर्द", "अकेला", "अकेली",
+      "अकेलापन", "नुकसान", "मर गया", "मर गई",
+      "बिछड़", "बिछड़ गया", "बिछड़ गई",
+      "याद आ रही", "बहुत दुख", "दिल टूट"
+    ],
+
+    Happy: [
+      "खुश", "खुशी", "खुश हूं", "खुश हूँ",
+      "बहुत अच्छा", "अच्छा लगा", "शानदार",
+      "कमाल", "वाह", "धन्यवाद", "शुक्रिया",
+      "मिल गया", "मिल गई", "सफल", "सफलता",
+      "जीत गए", "जीत गया", "जीत गई",
+      "बधाई", "मुबारक", "मुस्कुर", "हंसी", "हँसी"
+    ],
+
+    Excited: [
+      "वाह!", "अरे वाह", "कमाल!", "शुरू करते हैं",
+      "चलो", "जल्दी करो", "जल्दी चलो",
+      "मजा आएगा", "मज़ा आएगा",
+      "जीतेंगे", "देखते हैं", "रोमांच",
+      "बहुत बढ़िया", "जबरदस्त", "शानदार!"
+    ],
+
+    Surprised: [
+      "क्या!", "सच!", "सच में", "सच?",
+      "अरे!", "ओह!", "ओह", "हैरान",
+      "यकीन नहीं", "विश्वास नहीं", "ये कैसे",
+      "ऐसा कैसे", "अचानक", "क्या बात"
+    ],
+
+    Worried: [
+      "चिंता", "चिंतित", "परेशान", "फिक्र",
+      "क्या होगा", "क्या होगा अब", "मुसीबत",
+      "समस्या", "दिक्कत", "पता नहीं",
+      "कहीं ऐसा न हो", "डर लग रहा",
+      "चिंता हो रही", "परेशानी"
+    ],
+
+    Disappointed: [
+      "निराश", "अफसोस", "काश", "उम्मीद टूट",
+      "उम्मीद नहीं", "बुरा लगा", "काम नहीं हुआ",
+      "हार गया", "हार गई", "नाकाम",
+      "असफल", "सब बेकार", "कोई फायदा नहीं"
+    ],
+
+    Serious: [
+      "ध्यान से सुनो", "ध्यान रखना", "याद रखना",
+      "सावधान", "चेतावनी", "जरूरी बात",
+      "जरूरी है", "फैसला", "सच्चाई",
+      "सच यह है", "एक बात याद रखना",
+      "मुझे तुमसे कुछ कहना है",
+      "यह बहुत गंभीर", "गंभीर बात"
+    ]
+  };
+
+  // Keyword scoring
+  Object.keys(rules).forEach(emotion => {
+    rules[emotion].forEach(word => {
+      if (t.includes(word.toLowerCase())) {
+        scores[emotion] += word.length >= 8 ? 3 : 2;
       }
     });
+  });
 
-    // Punctuation based emotion
-    if (
-      bestEmotion === "Neutral" &&
-      (text.includes("!") || text.includes("!!"))
-    ) {
-      bestEmotion = "Excited";
-      bestHindi = "उत्साहित होकर";
-    }
+  // Question-based emotion
+  if (t.includes("?") || t.includes("？")) {
+    scores.Worried += 1;
+    scores.Surprised += 1;
 
     if (
-      bestEmotion === "Neutral" &&
-      text.includes("...")
+      t.includes("क्यों") ||
+      t.includes("कैसे") ||
+      t.includes("क्या तुम") ||
+      t.includes("तुमने")
     ) {
-      bestEmotion = "Serious";
-      bestHindi = "गंभीरता से";
+      scores.Angry += 2;
     }
-
-    return {
-      emotion: bestEmotion,
-      hindi: bestHindi
-    };
   }
+
+  // Exclamation-based emotion
+  if (t.includes("!")) {
+    scores.Excited += 2;
+    scores.Surprised += 1;
+  }
+
+  // Strong confrontation
+  if (
+    t.includes("तुमने") &&
+    (
+      t.includes("क्यों") ||
+      t.includes("गलत") ||
+      t.includes("झूठ") ||
+      t.includes("धोखा")
+    )
+  ) {
+    scores.Angry += 4;
+  }
+
+  // Positive expressions
+  if (
+    t.includes("बहुत") &&
+    (
+      t.includes("अच्छा") ||
+      t.includes("खुश") ||
+      t.includes("बढ़िया") ||
+      t.includes("शानदार")
+    )
+  ) {
+    scores.Happy += 3;
+  }
+
+  // Find strongest emotion
+  let bestEmotion = "Neutral";
+  let bestScore = 0;
+
+  Object.keys(scores).forEach(emotion => {
+    if (scores[emotion] > bestScore) {
+      bestScore = scores[emotion];
+      bestEmotion = emotion;
+    }
+  });
+
+  const hindiMap = {
+    Angry: "गुस्से में",
+    Fearful: "डरते हुए",
+    Sad: "दुखी होकर",
+    Happy: "खुश होकर",
+    Excited: "उत्साहित होकर",
+    Surprised: "हैरान होकर",
+    Worried: "चिंतित होकर",
+    Disappointed: "निराश होकर",
+    Serious: "गंभीरता से",
+    Neutral: "सामान्य स्वर में"
+  };
+
+  return {
+    emotion: bestEmotion,
+    hindi: hindiMap[bestEmotion]
+  };
+}
+
 
   try {
     status.textContent =
