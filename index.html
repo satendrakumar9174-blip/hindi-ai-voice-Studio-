@@ -1106,103 +1106,192 @@ async function generateAllVoices() {
   }
 
   // एक dialogue का audio
-  async function generateOneDialogue(
-    dialogue,
-    number
-  ) {
-    const characterName =
-      normalizeName(dialogue.character);
+  async function generateOneDialogue(dialogue, number) {
 
-    const voice =
-      voiceMap[characterName];
+  const characterName =
+    normalizeName(dialogue.character);
 
-    let lastError =
-      "Voice generate नहीं हुई।";
+  const voice =
+    voiceMap[characterName];
 
-    // Maximum 6 attempts
-    for (let attempt = 1; attempt <= 6; attempt++) {
+  let lastError =
+    "Voice generate नहीं हुई।";
+
+  // Maximum 10 attempts
+  for (let attempt = 1; attempt <= 10; attempt++) {
+
+    try {
+
+      const response = await fetch(
+        BACKEND_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify({
+            text: dialogue.text,
+            voice: voice,
+            emotion: dialogue.emotion
+          })
+        }
+      );
+
+      let result;
+
       try {
-        const response = await fetch(
-          BACKEND_URL,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "text/plain;charset=utf-8"
-            },
-            body: JSON.stringify({
-              text: dialogue.text,
-              voice: voice,
-              emotion: dialogue.emotion
-            })
-          }
+        result = await response.json();
+      } catch (e) {
+        throw new Error(
+          "Server से सही response नहीं मिला।"
         );
-
-        let result;
-
-        try {
-          result = await response.json();
-        } catch (e) {
-          throw new Error(
-            "Server से सही response नहीं मिला।"
-          );
-        }
-
-        if (
-          result &&
-          result.success &&
-          result.audioData
-        ) {
-          return result;
-        }
-
-        const message =
-          errorMessage(
-            result ? result.error : null
-          );
-
-        lastError = message;
-
-        // Permanent error है तो तुरंत stop
-        if (!retryableError(message)) {
-          throw new Error(message);
-        }
-
-      } catch (error) {
-        lastError =
-          errorMessage(error);
-
-        if (
-          !retryableError(error) ||
-          attempt === 6
-        ) {
-          throw new Error(
-            `${number}वां dialogue (${dialogue.character}) generate नहीं हुआ: ${lastError}`
-          );
-        }
       }
 
-      // Retry से पहले automatic wait
-      const waitTime =
-        Math.min(
-          60000,
-          1500 *
-            Math.pow(2, attempt - 1)
-        ) +
-        Math.floor(Math.random() * 1000);
+      // SUCCESS
+      if (
+        result &&
+        result.success &&
+        result.audioData
+      ) {
+        return result;
+      }
+
+      const message =
+        errorMessage(
+          result ? result.error : null
+        );
+
+      lastError = message;
+
+      const lowerMessage =
+        message.toLowerCase();
+
+      /*
+        Google quota / 429 / temporary errors
+      */
+
+      const isQuotaError =
+        lowerMessage.includes("quota exceeded") ||
+        lowerMessage.includes("429") ||
+        lowerMessage.includes("resource_exhausted") ||
+        lowerMessage.includes("rate limit") ||
+        lowerMessage.includes("too_many_requests");
+
+      const isTemporaryError =
+        isQuotaError ||
+        lowerMessage.includes("503") ||
+        lowerMessage.includes("unavailable") ||
+        lowerMessage.includes("timeout") ||
+        lowerMessage.includes("deadline_exceeded") ||
+        lowerMessage.includes("500") ||
+        lowerMessage.includes("502") ||
+        lowerMessage.includes("504") ||
+        lowerMessage.includes("network");
+
+      // Permanent error
+      if (!isTemporaryError) {
+        throw new Error(message);
+      }
+
+      /*
+        Google response में अगर लिखा है:
+
+        Please retry in 15.445894452s
+
+        तो वही time पढ़ेंगे।
+      */
+
+      const retryMatch =
+        message.match(
+          /retry in\s+([\d.]+)\s*s/i
+        );
+
+      let waitTime;
+
+      if (retryMatch) {
+
+        const seconds =
+          parseFloat(retryMatch[1]);
+
+        waitTime =
+          Math.ceil(seconds * 1000) + 1500;
+
+      } else {
+
+        // अगर Google ने time नहीं दिया
+        waitTime =
+          Math.min(
+            60000,
+            3000 *
+              Math.pow(2, attempt - 1)
+          ) +
+          Math.floor(
+            Math.random() * 1500
+          );
+      }
 
       if (button) {
         button.textContent =
-          `⏳ ${number}/${dialogues.length} — retry ${attempt + 1}/6...`;
+          `⏳ ${number}/${dialogues.length} — Google quota wait ${Math.ceil(waitTime / 1000)}s...`;
+      }
+
+      await sleep(waitTime);
+
+    } catch (error) {
+
+      lastError =
+        errorMessage(error);
+
+      const lowerError =
+        lastError.toLowerCase();
+
+      const retryable =
+        lowerError.includes("quota exceeded") ||
+        lowerError.includes("429") ||
+        lowerError.includes("resource_exhausted") ||
+        lowerError.includes("rate limit") ||
+        lowerError.includes("too_many_requests") ||
+        lowerError.includes("503") ||
+        lowerError.includes("unavailable") ||
+        lowerError.includes("timeout") ||
+        lowerError.includes("deadline_exceeded") ||
+        lowerError.includes("500") ||
+        lowerError.includes("502") ||
+        lowerError.includes("504") ||
+        lowerError.includes("network");
+
+      if (!retryable || attempt === 10) {
+
+        throw new Error(
+          `${number}वां dialogue (${dialogue.character}) generate नहीं हुआ: ${lastError}`
+        );
+      }
+
+      const waitTime =
+        Math.min(
+          60000,
+          3000 *
+            Math.pow(2, attempt - 1)
+        ) +
+        Math.floor(
+          Math.random() * 1500
+        );
+
+      if (button) {
+        button.textContent =
+          `⏳ ${number}/${dialogues.length} — retry ${attempt + 1}/10...`;
       }
 
       await sleep(waitTime);
     }
-
-    throw new Error(
-      `${number}वां dialogue generate नहीं हुआ।`
-    );
   }
+
+  throw new Error(
+    `${number}वां dialogue generate नहीं हुआ: ${lastError}`
+  );
+}
+
 
   try {
     /*
