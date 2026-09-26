@@ -994,9 +994,7 @@ async function generateAllVoices() {
     );
 
     if (match && match[2].trim()) {
-      const emotionData = extractEmotion(
-        match[2].trim()
-      );
+      const emotionData = extractEmotion(match[2].trim());
 
       dialogues.push({
         index: index,
@@ -1012,7 +1010,15 @@ async function generateAllVoices() {
     return;
   }
 
-  // Character → selected voice
+  // Character name को साफ करने के लिए
+  function normalizeName(name) {
+    return name
+      .replace(/^[^\p{L}\p{N}]*/u, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Character → Voice mapping
   const characterBoxes =
     document.querySelectorAll(".character");
 
@@ -1026,17 +1032,21 @@ async function generateAllVoices() {
       box.querySelector(".voice-select");
 
     if (nameElement && select) {
-      const name = nameElement.textContent
-        .replace(/^[^\p{L}\p{N}]*/u, "")
-        .trim();
+      const name =
+        normalizeName(nameElement.textContent);
 
-      voiceMap[name] = select.value;
+      if (name && select.value) {
+        voiceMap[name] = select.value;
+      }
     }
   });
 
-  // Check all voices
+  // पहले सभी voices check करें
   for (const dialogue of dialogues) {
-    if (!voiceMap[dialogue.character]) {
+    const characterName =
+      normalizeName(dialogue.character);
+
+    if (!voiceMap[characterName]) {
       alert(
         `⚠️ ${dialogue.character} की voice select नहीं की गई है।`
       );
@@ -1052,93 +1062,276 @@ async function generateAllVoices() {
     button.disabled = true;
   }
 
+  const sleep = ms =>
+    new Promise(resolve => setTimeout(resolve, ms));
+
+  function errorMessage(error) {
+    if (!error) {
+      return "Voice generation failed";
+    }
+
+    if (typeof error === "string") {
+      return error;
+    }
+
+    if (error.message) {
+      return error.message;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch (e) {
+      return String(error);
+    }
+  }
+
+  function retryableError(error) {
+    const message =
+      errorMessage(error).toLowerCase();
+
+    return (
+      message.includes("429") ||
+      message.includes("resource_exhausted") ||
+      message.includes("rate limit") ||
+      message.includes("too_many_requests") ||
+      message.includes("503") ||
+      message.includes("unavailable") ||
+      message.includes("timeout") ||
+      message.includes("deadline_exceeded") ||
+      message.includes("500") ||
+      message.includes("502") ||
+      message.includes("504") ||
+      message.includes("network")
+    );
+  }
+
+  // एक dialogue का audio
+  async function generateOneDialogue(
+    dialogue,
+    number
+  ) {
+    const characterName =
+      normalizeName(dialogue.character);
+
+    const voice =
+      voiceMap[characterName];
+
+    let lastError =
+      "Voice generate नहीं हुई।";
+
+    // Maximum 6 attempts
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      try {
+        const response = await fetch(
+          BACKEND_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "text/plain;charset=utf-8"
+            },
+            body: JSON.stringify({
+              text: dialogue.text,
+              voice: voice,
+              emotion: dialogue.emotion
+            })
+          }
+        );
+
+        let result;
+
+        try {
+          result = await response.json();
+        } catch (e) {
+          throw new Error(
+            "Server से सही response नहीं मिला।"
+          );
+        }
+
+        if (
+          result &&
+          result.success &&
+          result.audioData
+        ) {
+          return result;
+        }
+
+        const message =
+          errorMessage(
+            result ? result.error : null
+          );
+
+        lastError = message;
+
+        // Permanent error है तो तुरंत stop
+        if (!retryableError(message)) {
+          throw new Error(message);
+        }
+
+      } catch (error) {
+        lastError =
+          errorMessage(error);
+
+        if (
+          !retryableError(error) ||
+          attempt === 6
+        ) {
+          throw new Error(
+            `${number}वां dialogue (${dialogue.character}) generate नहीं हुआ: ${lastError}`
+          );
+        }
+      }
+
+      // Retry से पहले automatic wait
+      const waitTime =
+        Math.min(
+          60000,
+          1500 *
+            Math.pow(2, attempt - 1)
+        ) +
+        Math.floor(Math.random() * 1000);
+
+      if (button) {
+        button.textContent =
+          `⏳ ${number}/${dialogues.length} — retry ${attempt + 1}/6...`;
+      }
+
+      await sleep(waitTime);
+    }
+
+    throw new Error(
+      `${number}वां dialogue generate नहीं हुआ।`
+    );
+  }
+
   try {
-    const audioUrls = [];
+    /*
+      IMPORTANT:
+      हम सभी audio को उसी क्रम में रखते हैं
+      जिस क्रम में dialogue script में है।
+    */
 
-    // IMPORTANT:
-    // Dialogues हमेशा original script order में generate होंगे।
-    for (let i = 0; i < dialogues.length; i++) {
+    const pcmChunks = [];
 
+    let totalAudioSize = 0;
+
+    let firstHeader = null;
+
+    for (
+      let i = 0;
+      i < dialogues.length;
+      i++
+    ) {
       const dialogue = dialogues[i];
 
       if (button) {
         button.textContent =
-          `⏳ ${i + 1}/${dialogues.length} dialogue generate हो रहा है...`;
+          `🎙️ ${i + 1}/${dialogues.length} dialogue generate हो रहा है...`;
       }
 
-      let audioUrl = null;
-      let lastError = null;
+      const result =
+        await generateOneDialogue(
+          dialogue,
+          i + 1
+        );
 
-      // Failed dialogue को maximum 3 बार retry करें
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      // Base64 → Blob
+      const audioBlob =
+        base64ToBlob(
+          result.audioData,
+          result.mimeType ||
+            "audio/wav"
+        );
 
-        try {
+      // Blob → ArrayBuffer
+      const buffer =
+        await audioBlob.arrayBuffer();
 
-          audioUrl = await generateVoice(
-            dialogue.text,
-            voiceMap[dialogue.character],
-            dialogue.emotion
-          );
-
-          if (audioUrl) {
-            break;
-          }
-
-        } catch (error) {
-          lastError = error;
-        }
-
-        // Retry से पहले थोड़ा wait
-        if (attempt < 3) {
-          await new Promise(resolve =>
-            setTimeout(resolve, 1500)
-          );
-        }
-      }
-
-      if (!audioUrl) {
+      if (buffer.byteLength <= 44) {
         throw new Error(
-          `${i + 1}वें dialogue (${dialogue.character}) का audio generate नहीं हुआ।`
+          `${i + 1}वां dialogue का audio बहुत छोटा है।`
         );
       }
 
-      // उसी order में save
-      audioUrls.push(audioUrl);
+      /*
+        पहला WAV header रखेंगे।
+        बाकी सभी files से सिर्फ PCM audio data लेंगे।
+      */
+
+      if (!firstHeader) {
+        firstHeader =
+          new Uint8Array(
+            buffer.slice(0, 44)
+          );
+      }
+
+      const pcm =
+        new Uint8Array(
+          buffer.slice(44)
+        );
+
+      pcmChunks.push(pcm);
+
+      totalAudioSize +=
+        pcm.byteLength;
+
+      // लगातार requests से rate-limit कम करने के लिए
+      await sleep(700);
+    }
+
+    if (
+      !firstHeader ||
+      pcmChunks.length === 0
+    ) {
+      throw new Error(
+        "कोई audio data नहीं मिला।"
+      );
     }
 
     if (button) {
       button.textContent =
-        "🔗 सभी audio को सही order में जोड़ रहा है...";
+        "🔗 पूरी 30 मिनट की story जोड़ रहा है...";
     }
 
-    const wavBuffers = [];
+    /*
+      Final WAV header
+    */
 
-    // फिर से उसी order में audio पढ़ें
-    for (let i = 0; i < audioUrls.length; i++) {
+    const finalHeader =
+      firstHeader.buffer.slice(0);
 
-      if (button) {
-        button.textContent =
-          `🔗 Audio जोड़ रहा है: ${i + 1}/${audioUrls.length}`;
-      }
+    const headerView =
+      new DataView(finalHeader);
 
-      const response =
-        await fetch(audioUrls[i]);
+    // RIFF file size
+    headerView.setUint32(
+      4,
+      36 + totalAudioSize,
+      true
+    );
 
-      if (!response.ok) {
-        throw new Error(
-          `Audio ${i + 1} पढ़ा नहीं जा सका।`
-        );
-      }
+    // WAV data size
+    headerView.setUint32(
+      40,
+      totalAudioSize,
+      true
+    );
 
-      const buffer =
-        await response.arrayBuffer();
+    /*
+      सभी PCM chunks को उसी order में
+      एक final WAV में जोड़ें।
+    */
 
-      wavBuffers.push(buffer);
-    }
-
-    // Original dialogue order preserved
     const finalWav =
-      combineWavFiles(wavBuffers);
+      new Blob(
+        [
+          finalHeader,
+          ...pcmChunks
+        ],
+        {
+          type: "audio/wav"
+        }
+      );
 
     const finalUrl =
       URL.createObjectURL(finalWav);
@@ -1149,8 +1342,8 @@ async function generateAllVoices() {
       );
 
     if (!player) {
-
-      player = document.createElement("audio");
+      player =
+        document.createElement("audio");
 
       player.id =
         "final-audio-player";
@@ -1168,26 +1361,39 @@ async function generateAllVoices() {
         .appendChild(player);
     }
 
+    // पुराना URL हटाएँ
+    if (
+      player.dataset.objectUrl
+    ) {
+      URL.revokeObjectURL(
+        player.dataset.objectUrl
+      );
+    }
+
+    player.dataset.objectUrl =
+      finalUrl;
+
     player.src = finalUrl;
 
     if (button) {
       button.textContent =
-        "✅ Final audio तैयार है";
+        "✅ 30 मिनट की Final Voice तैयार है";
     }
 
     alert(
-      `✅ पूरी story का एक audio तैयार है!\n\n${dialogues.length} dialogues सही order में जोड़े गए।`
+      `✅ पूरी story का final audio तैयार है!\n\n${dialogues.length} dialogues सही order में जोड़े गए।`
     );
 
-    await player.play().catch(() => {});
+    await player
+      .play()
+      .catch(() => {});
 
   } catch (error) {
-
     console.error(error);
 
     alert(
-      "❌ Final audio generate नहीं हुआ:\n" +
-      error.message
+      "❌ Final audio generate नहीं हुआ:\n\n" +
+      errorMessage(error)
     );
 
     if (button) {
@@ -1196,17 +1402,17 @@ async function generateAllVoices() {
     }
 
   } finally {
-
     if (button) {
       button.disabled = false;
 
       setTimeout(() => {
         button.textContent =
           "🎙️ Generate All Voices";
-      }, 2000);
+      }, 3000);
     }
   }
 }
+
 
 function combineWavFiles(buffers) {
 
